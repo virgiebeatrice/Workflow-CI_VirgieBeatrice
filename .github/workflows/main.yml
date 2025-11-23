@@ -34,8 +34,8 @@ jobs:
       - name: Install Dependencies
         run: |
           pip install --upgrade pip
-          pip install mlflow
-          pip install scikit-learn pandas numpy dagshub
+          pip install mlflow==2.19.0
+          pip install scikit-learn pandas numpy dagshub seaborn
           pip install python-dotenv
           
       - name: Set DagsHub Credentials for MLflow
