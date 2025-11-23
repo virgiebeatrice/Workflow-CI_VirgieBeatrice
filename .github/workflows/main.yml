@@ -53,23 +53,16 @@ from mlflow.tracking import MlflowClient
 
 client = MlflowClient()
 
-exp_id = "1" 
-
 runs = client.search_runs(
-    experiment_ids=[exp_id],
+    experiment_ids=["1"],
     max_results=1,
     order_by=["attributes.start_time DESC"],
 )
-if not runs:
-    raise SystemExit("No runs found for experiment")
-
 print(runs[0].info.run_id)
 EOF
           )
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "$RUN_ID"
-
-
 
       - name: Install Python dependencies
         run: pip install mlflow docker
