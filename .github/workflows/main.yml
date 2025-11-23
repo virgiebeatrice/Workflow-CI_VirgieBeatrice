@@ -47,10 +47,22 @@ jobs:
       - name: Get latest MLflow run_id
         id: get_run
         run: |
-          RUN_JSON=$(curl -s -u "${MLFLOW_TRACKING_USERNAME}:${MLFLOW_TRACKING_PASSWORD}" "${MLFLOW_TRACKING_URI}/api/2.0/mlflow/runs/search?max_results=1")
-          RUN_ID=$(echo "$RUN_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['runs'][0]['info']['run_id'])")
+          RUN_ID=$(python - << 'EOF'
+          import mlflow
+          from mlflow.tracking import MlflowClient
+          
+          client = MlflowClient()
+          runs = client.search_runs(
+              experiment_ids=None,
+              max_results=1,
+              order_by=["attributes.start_time DESC"],
+          )
+          print(runs[0].info.run_id)
+          EOF
+                    )
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "$RUN_ID"
+
 
       - name: Install Python dependencies
         run: pip install mlflow docker
