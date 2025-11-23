@@ -83,55 +83,55 @@ def train_basic_model(data_path: str = DATA_PATH):
         stratify=y,
     )
 
+    mlflow.set_tag("mlflow.runName", "RandomForest_Baseline")
+    
     # Enable autolog 
     mlflow.sklearn.autolog(
         log_input_examples=True,
         log_model_signatures=True
     )
 
-    with mlflow.start_run(run_name="RandomForest_Baseline", nested=False):
+    model = RandomForestClassifier(
+        n_estimators=200,
+        random_state=42,
+        n_jobs=-1,
+    )
 
-        model = RandomForestClassifier(
-            n_estimators=200,
-            random_state=42,
-            n_jobs=-1,
-        )
+    model.fit(X_train, y_train)
 
-        model.fit(X_train, y_train)
+    # Evaluate
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred, average="weighted")
 
-        # Evaluate
-        y_pred = model.predict(X_test)
-        acc = accuracy_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred, average="weighted")
+    print("\n=== Baseline Model Evaluation ===")
+    print(f"Accuracy: {acc:.4f}")
+    print(f"F1-weighted: {f1:.4f}")
 
-        print("\n=== Baseline Model Evaluation ===")
-        print(f"Accuracy: {acc:.4f}")
-        print(f"F1-weighted: {f1:.4f}")
+    # Prediction Sample
+    pred_df = pd.DataFrame({
+        "y_true": y_test,
+        "y_pred": y_pred,
+    })
 
-        # Prediction Sample
-        pred_df = pd.DataFrame({
-            "y_true": y_test,
-            "y_pred": y_pred,
-        })
+    pred_path = os.path.join(PRED_DIR, "rf_predictions.csv")
+    pred_df.to_csv(pred_path, index=False)
+    mlflow.log_artifact(pred_path)
 
-        pred_path = os.path.join(PRED_DIR, "rf_predictions.csv")
-        pred_df.to_csv(pred_path, index=False)
-        mlflow.log_artifact(pred_path)
+    # Confusion Matrix Plot
+    cm = confusion_matrix(y_test, y_pred)
 
-        # Confusion Matrix Plot
-        cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(7, 6))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.title("Confusion Matrix (Baseline)")
+    plt.xlabel("Predicted")
+    plt.ylabel("Actual")
 
-        plt.figure(figsize=(7, 6))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-        plt.title("Confusion Matrix (Baseline)")
-        plt.xlabel("Predicted")
-        plt.ylabel("Actual")
+    cm_path = os.path.join(PLOT_DIR, "confusion_matrix_baseline.png")
+    plt.savefig(cm_path, dpi=200, bbox_inches="tight")
+    plt.close()
 
-        cm_path = os.path.join(PLOT_DIR, "confusion_matrix_baseline.png")
-        plt.savefig(cm_path, dpi=200, bbox_inches="tight")
-        plt.close()
-
-        mlflow.log_artifact(cm_path)
+    mlflow.log_artifact(cm_path)
 
 
 if __name__ == "__main__":
