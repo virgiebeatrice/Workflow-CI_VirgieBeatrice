@@ -1,4 +1,7 @@
 import os
+os.environ.pop("MLFLOW_RUN_ID", None)
+os.environ.pop("MLFLOW_EXPERIMENT_ID", None)
+
 import pandas as pd
 import mlflow
 import mlflow.sklearn
