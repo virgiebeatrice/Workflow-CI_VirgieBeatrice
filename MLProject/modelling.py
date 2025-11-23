@@ -1,43 +1,48 @@
-import argparse
+import os
 import pandas as pd
 import mlflow
 import mlflow.sklearn
-import dagshub
 
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
-    precision_score,
-    recall_score,
     confusion_matrix,
 )
 import matplotlib.pyplot as plt
 import seaborn as sns
+import dagshub
 
 DATA_PATH = "processed_dataset.csv"
 TARGET_COL = "Accident Severity"
 
 DAGSHUB_OWNER = "virgiebeatrice"
-DAGSHUB_REPO = "global-accident-mlflow.mlflow"       
+DAGSHUB_REPO = "global-accident-mlflow.mlflow"      
+
+# clean artifact directories for baseline model
+ARTIFACT_DIR = "artifacts_basic"
+PRED_DIR = os.path.join(ARTIFACT_DIR, "predictions")
+PLOT_DIR = os.path.join(ARTIFACT_DIR, "plots")
+
+for folder in [PRED_DIR, PLOT_DIR]:
+    os.makedirs(folder, exist_ok=True)
+
 
 def load_data(path: str):
     """
-    Load the preprocessed dataset and split into
-    feature matrix (X) and target vector (y).
+    Load dataset and return feature matrix X and target y.
     """
     df = pd.read_csv(path)
 
     if TARGET_COL not in df.columns:
         raise ValueError(
-            f"Target column '{TARGET_COL}' not found. "
+            f"Target column '{TARGET_COL}' is missing. "
             f"Available columns: {list(df.columns)}"
         )
 
     X = df.drop(columns=[TARGET_COL])
     y = df[TARGET_COL]
-
     return X, y
 
 def init_dagshub():
@@ -54,91 +59,81 @@ def init_dagshub():
     print(f"[INFO] MLflow tracking URI: {mlflow.get_tracking_uri()}")
 
 
-def train_model(data_path: str, mode: str = "local"):
+def train_basic_model(data_path: str = DATA_PATH):
     """
-    Train a basic RandomForestClassifier using manual MLflow logging.
-    Modes:
-      - "local": log to local MLflow (mlruns/)
-      - "dagshub": log to DagsHub (online)
+    Train a baseline RandomForest model with MLflow autolog.
+    Artifacts stored neatly in artifacts_basic/.
     """
 
-    # Select MLflow tracking mode
-    if mode == "local":
-        mlflow.set_tracking_uri("file:./mlruns")
-        print("[INFO] Tracking locally to ./mlruns")
-    elif mode == "dagshub":
-        init_dagshub()
-    else:
-        raise ValueError("Mode must be either 'local' or 'dagshub'.")
+    # MLflow local tracking
+    # mlflow.set_tracking_uri("file:./mlruns")
 
-    mlflow.set_experiment(f"GlobalAccident_BasicModel_{mode}")
+    # Dagshub
+    init_dagshub()
 
-    # Load data
+    mlflow.set_experiment("GlobalAccident_BasicModel")
+
+    # Load dataset
     X, y = load_data(data_path)
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42, stratify=y
+        X,
+        y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y,
     )
 
-    with mlflow.start_run(run_name=f"RF_Basic_{mode}"):
+    # Enable autolog 
+    mlflow.sklearn.autolog(
+        log_input_examples=True,
+        log_model_signatures=True
+    )
 
-        # Model Training
+    with mlflow.start_run(run_name="RandomForest_Baseline"):
+
         model = RandomForestClassifier(
             n_estimators=200,
             random_state=42,
             n_jobs=-1,
         )
+
         model.fit(X_train, y_train)
 
-        # Predictions & Metrics
+        # Evaluate
         y_pred = model.predict(X_test)
-
         acc = accuracy_score(y_test, y_pred)
         f1 = f1_score(y_test, y_pred, average="weighted")
-        precision = precision_score(y_test, y_pred, average="weighted")
-        recall = recall_score(y_test, y_pred, average="weighted")
 
-        # Manual Logging 
-        mlflow.log_metric("accuracy", acc)
-        mlflow.log_metric("f1_weighted", f1)
-        mlflow.log_metric("precision_weighted", precision)
-        mlflow.log_metric("recall_weighted", recall)
-
-        # Log Model
-        mlflow.sklearn.log_model(model, artifact_path="model")
-
-        # Confusion Matrix
-        cm = confusion_matrix(y_test, y_pred)
-
-        plt.figure(figsize=(6, 5))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-        plt.title("Confusion Matrix")
-        plt.xlabel("Predicted")
-        plt.ylabel("True")
-        plt.tight_layout()
-        cm_path = "confusion_matrix.png"
-        plt.savefig(cm_path)
-        mlflow.log_artifact(cm_path)
+        print("\n=== Baseline Model Evaluation ===")
+        print(f"Accuracy: {acc:.4f}")
+        print(f"F1-weighted: {f1:.4f}")
 
         # Prediction Sample
-        df_preds = pd.DataFrame({
+        pred_df = pd.DataFrame({
             "y_true": y_test,
-            "y_pred": y_pred
+            "y_pred": y_pred,
         })
-        pred_path = "prediction_sample.csv"
-        df_preds.to_csv(pred_path, index=False)
+
+        pred_path = os.path.join(PRED_DIR, "rf_predictions.csv")
+        pred_df.to_csv(pred_path, index=False)
         mlflow.log_artifact(pred_path)
 
-        # Console Output
-        print("=== Basic Model Evaluation ===")
-        print(f"Accuracy  : {acc:.4f}")
-        print(f"F1-score  : {f1:.4f}")
-        print(f"Precision : {precision:.4f}")
-        print(f"Recall    : {recall:.4f}")
+        # Confusion Matrix Plot
+        cm = confusion_matrix(y_test, y_pred)
+
+        plt.figure(figsize=(7, 6))
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+        plt.title("Confusion Matrix (Baseline)")
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
+
+        cm_path = os.path.join(PLOT_DIR, "confusion_matrix_baseline.png")
+        plt.savefig(cm_path, dpi=200, bbox_inches="tight")
+        plt.close()
+
+        mlflow.log_artifact(cm_path)
+
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", type=str, default="local")
-    args = parser.parse_args()
-
-    train_model(DATA_PATH, mode=args.mode)
+    train_basic_model()
