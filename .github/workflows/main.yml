@@ -1,4 +1,4 @@
-name: MLflow CI - Retrain Global Accident Model
+name: MLflow CI - Remote DagsHub Training
 
 on:
   push:
@@ -9,12 +9,9 @@ on:
   workflow_dispatch: {}
 
 env:
-  # === DagsHub MLflow Remote Tracking ===
   MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
   MLFLOW_TRACKING_USERNAME: ${{ secrets.DAGSHUB_USERNAME }}
   MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
-
-  # === DockerHub ===
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
   DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -23,69 +20,74 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Run actions/checkout@v3
+        uses: actions/checkout@v3
 
-      - name: Setup Python
+      - name: Set up Python 3.12.7
         uses: actions/setup-python@v5
         with:
           python-version: "3.12.7"
 
-      - name: Install Dependencies
+      - name: Check Env
+        run: |
+          python --version
+          echo "Tracking URI: $MLFLOW_TRACKING_URI"
+
+      - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-      
-      - name: Set DagsHub Credentials for MLflow
-        run: |
-          echo "MLFLOW_TRACKING_USERNAME=${{ secrets.DAGSHUB_USERNAME }}" >> $GITHUB_ENV
-          echo "MLFLOW_TRACKING_PASSWORD=${{ secrets.DAGSHUB_TOKEN }}" >> $GITHUB_ENV
+          pip install mlflow requests rclone docker
 
-      - name: Run MLflow Project
+      - name: Run mlflow project
         working-directory: ./MLProject
         run: |
           mlflow run . -e main --env-manager=local
 
-      - name: Get Latest MLflow Run ID
-        id: get_run_id
+      - name: Get latest MLflow run_id
+        id: get_run
         run: |
-          RUN_DIR=$(ls -td mlruns/* | head -1)
-          RUN_ID=$(basename "$RUN_DIR")
-          echo "Latest RUN: $RUN_ID"
+          RUN_JSON=$(curl -s -u "${MLFLOW_TRACKING_USERNAME}:${MLFLOW_TRACKING_PASSWORD}" "${MLFLOW_TRACKING_URI}/api/2.0/mlflow/runs/search?max_results=1")
+          RUN_ID=$(echo "$RUN_JSON" | python3 -c "import sys, json; print(json.load(sys.stdin)['runs'][0]['info']['run_id'])")
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+          echo "$RUN_ID"
 
-      - name: Upload MLflow Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mlflow-artifacts
-          path: |
-            MLProject/mlruns
-            MLProject/artifacts
-          if-no-files-found: ignore
+      - name: Install Python dependencies
+        run: pip install mlflow docker
 
-      - name: Install Docker SDK
-        run: pip install docker
-
-      - name: Build Docker Image
-        if: success() && env.RUN_ID != ''
+      - name: Upload to Google Drive
+        env:
+          RCLONE_CONFIG_GDRIVE_TYPE: drive
+          RCLONE_CONFIG_GDRIVE_TOKEN: ${{ secrets.GDRIVE_TOKEN }}
         run: |
-          echo "Building Docker image for RUN_ID=${RUN_ID}"
-          mlflow models build-docker \
-            -m "MLProject/mlruns/${RUN_ID}/artifacts/model" \
-            -n "${DOCKERHUB_USERNAME}/global-accident-mlflow:${RUN_ID}"
+          mlflow artifacts download -r "${MLFLOW_TRACKING_URI}" -u "runs:/${RUN_ID}/model" -d model_dir
+          rclone copy model_dir gdrive:/mlflow_artifacts/${RUN_ID} -v
 
-      - name: Login to DockerHub
-        if: success() && env.RUN_ID != ''
+      - name: Build Docker Model
+        run: |
+          DOCKER_TAG="${DOCKERHUB_USERNAME}/global-accident-mlflow:${RUN_ID}"
+          mlflow models build-docker -m model_dir -n "$DOCKER_TAG"
+
+      - name: Log in to Docker Hub
         run: echo "${DOCKERHUB_TOKEN}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
 
-      - name: Tag Docker Image as Latest
-        if: success() && env.RUN_ID != ''
+      - name: Tag Docker Image
         run: |
-          docker tag "${DOCKERHUB_USERNAME}/global-accident-mlflow:${RUN_ID}" \
-                     "${DOCKERHUB_USERNAME}/global-accident-mlflow:latest"
+          docker tag "${DOCKERHUB_USERNAME}/global-accident-mlflow:${RUN_ID}" "${DOCKERHUB_USERNAME}/global-accident-mlflow:latest"
 
-      - name: Push Docker Images
-        if: success() && env.RUN_ID != ''
+      - name: Push Docker Image
         run: |
           docker push "${DOCKERHUB_USERNAME}/global-accident-mlflow:${RUN_ID}"
           docker push "${DOCKERHUB_USERNAME}/global-accident-mlflow:latest"
+
+      - name: Post Log in to Docker Hub
+        run: echo "DockerHub post-cleanup done."
+
+      - name: Post Set up Python 3.12.7
+        run: echo "Python cleanup done."
+
+      - name: Post Run actions/checkout@v3
+        run: echo "Checkout cleanup done."
+
+      - name: Complete job
+        run: echo "CI pipeline complete."
