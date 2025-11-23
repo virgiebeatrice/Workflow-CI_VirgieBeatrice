@@ -50,12 +50,9 @@ def init_dagshub():
     Initialize DagsHub repository as the remote MLflow tracking server.
     Make sure credentials (username/token) are configured locally.
     """
-    dagshub.init(
-        repo_owner=DAGSHUB_OWNER,
-        repo_name=DAGSHUB_REPO,
-        mlflow=True,
+    mlflow.set_tracking_uri(
+        f"https://dagshub.com/{DAGSHUB_OWNER}/{DAGSHUB_REPO}.mlflow"
     )
-
     print(f"[INFO] MLflow tracking URI: {mlflow.get_tracking_uri()}")
 
 
