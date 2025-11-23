@@ -87,7 +87,7 @@ def train_basic_model(data_path: str = DATA_PATH):
         log_model_signatures=True
     )
 
-    with mlflow.start_run(run_name="RandomForest_Baseline"):
+    with mlflow.start_run(run_name="RandomForest_Baseline", nested=False):
 
         model = RandomForestClassifier(
             n_estimators=200,
