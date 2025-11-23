@@ -53,11 +53,7 @@ from mlflow.tracking import MlflowClient
 
 client = MlflowClient()
 
-exps = client.search_experiments(filter_string="name = 'GlobalAccident_BasicModel'")
-if not exps:
-    raise SystemExit("No experiment named GlobalAccident_BasicModel found")
-
-exp_id = exps[0].experiment_id
+exp_id = "1" 
 
 runs = client.search_runs(
     experiment_ids=[exp_id],
@@ -72,6 +68,7 @@ EOF
           )
           echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
           echo "$RUN_ID"
+
 
 
       - name: Install Python dependencies
