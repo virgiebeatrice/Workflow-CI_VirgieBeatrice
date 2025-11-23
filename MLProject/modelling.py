@@ -55,7 +55,9 @@ def init_dagshub():
     )
     print(f"[INFO] MLflow tracking URI: {mlflow.get_tracking_uri()}")
 
-
+if mlflow.active_run():
+    mlflow.end_run()
+    
 def train_basic_model(data_path: str = DATA_PATH):
     """
     Train a baseline RandomForest model with MLflow autolog.
