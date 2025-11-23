@@ -52,11 +52,21 @@ jobs:
           from mlflow.tracking import MlflowClient
           
           client = MlflowClient()
+          
+          exps = client.search_experiments(filter_string="name = 'GlobalAccident_BasicModel'")
+          if not exps:
+              raise SystemExit("No experiment named GlobalAccident_BasicModel found")
+          
+          exp_id = exps[0].experiment_id
+          
           runs = client.search_runs(
-              experiment_ids=None,
+              experiment_ids=[exp_id],
               max_results=1,
               order_by=["attributes.start_time DESC"],
           )
+          if not runs:
+              raise SystemExit("No runs found for experiment")
+          
           print(runs[0].info.run_id)
           EOF
                     )
