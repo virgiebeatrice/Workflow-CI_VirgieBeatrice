@@ -33,43 +33,51 @@ def load_data(path: str):
 def train():
     mlflow.set_experiment("CI_Training")
 
-    with mlflow.start_run(run_name="ci_run", nested=True):
-        X, y = load_data(DATA_PATH)
+    active = mlflow.active_run()
+    if active is None:
+        raise RuntimeError("No active MLflow run detected. Must be executed through MLProject.")
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42, stratify=y
-        )
+    print(f"Using MLflow Run ID: {active.info.run_id}")
 
-        model = RandomForestClassifier(
-            n_estimators=200,
-            random_state=42,
-            n_jobs=-1
-        )
+    X, y = load_data(DATA_PATH)
 
-        model.fit(X_train, y_train)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
 
-        mlflow.sklearn.log_model(model, artifact_path="model")
+    model = RandomForestClassifier(
+        n_estimators=200,
+        random_state=42,
+        n_jobs=-1
+    )
 
-        y_pred = model.predict(X_test)
-        acc = accuracy_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred, average="weighted")
+    model.fit(X_train, y_train)
 
-        mlflow.log_metric("accuracy", acc)
-        mlflow.log_metric("f1_weighted", f1)
+    # Manual model log
+    mlflow.sklearn.log_model(model, artifact_path="model")
 
-        pred_df = pd.DataFrame({"y_true": y_test, "y_pred": y_pred})
-        pred_path = os.path.join(PRED_DIR, "pred_ci.csv")
-        pred_df.to_csv(pred_path, index=False)
-        mlflow.log_artifact(pred_path)
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred, average="weighted")
 
-        cm = confusion_matrix(y_test, y_pred)
-        plt.figure(figsize=(6,5))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-        plt.title("CM - CI Run")
-        cm_path = os.path.join(PLOT_DIR, "cm_ci.png")
-        plt.savefig(cm_path)
-        plt.close()
-        mlflow.log_artifact(cm_path)
+    mlflow.log_metric("accuracy", acc)
+    mlflow.log_metric("f1_weighted", f1)
+
+    # Predictions artifact
+    pred_df = pd.DataFrame({"y_true": y_test, "y_pred": y_pred})
+    pred_path = os.path.join(PRED_DIR, "pred_ci.csv")
+    pred_df.to_csv(pred_path, index=False)
+    mlflow.log_artifact(pred_path)
+
+    # Confusion matrix
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.title("Confusion Matrix - CI")
+    cm_path = os.path.join(PLOT_DIR, "cm_ci.png")
+    plt.savefig(cm_path)
+    plt.close()
+    mlflow.log_artifact(cm_path)
 
 if __name__ == "__main__":
     train()

@@ -39,11 +39,10 @@ jobs:
 
     # 6. Get latest MLflow run_id
     - name: Get latest run ID
-      id: get_run_id
       run: |
-        cd MLProject/mlruns/0
-        latest=$(ls -t | head -1)
-        echo "run_id=$latest" >> $GITHUB_OUTPUT
+        RUN_ID=$(ls -td mlruns/*/* | head -1 | sed 's/.*\///')
+        echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+        echo "Latest run is $RUN_ID"
 
     # 7. Upload MLflow artifacts to GitHub
     - name: Upload MLflow artifacts
