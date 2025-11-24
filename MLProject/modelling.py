@@ -31,9 +31,9 @@ def load_data(path: str):
 
 
 def train():
-    mlflow.set_experiment("CI_Training", nested=True)
+    mlflow.set_experiment("CI_Training")
 
-    with mlflow.start_run(run_name="ci_run"):
+    with mlflow.start_run(run_name="ci_run", nested=True):
         X, y = load_data(DATA_PATH)
 
         X_train, X_test, y_train, y_test = train_test_split(
