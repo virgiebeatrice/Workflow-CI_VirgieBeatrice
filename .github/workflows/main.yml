@@ -21,54 +21,56 @@ jobs:
       with:
         python-version: "3.12.7"
 
-    # 3. Check Environment
-    - name: Check Python version
-      run: python --version
-
-    # 4. Install Dependencies (requirements.txt)
+    # 3. Install Dependencies
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # 5. Run MLflow Project
+    # 4. Run MLflow Project (outer run)
     - name: Run MLflow Project
       working-directory: MLProject
       run: |
-        mlflow run . --env-manager=local 
+        mlflow run . --env-manager=local
 
-    # 6. Get latest MLflow run_id
+    # 5. Get latest MLflow run ID
     - name: Get latest run ID
+      id: get_run_id
+      working-directory: MLProject
       run: |
-        RUN_ID=$(ls -td mlruns/*/* | head -1 | sed 's/.*\///')
+        RUN_ID=$(ls -td mlruns/*/* | head -1 | xargs basename)
         echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
+        echo "::set-output name=run_id::$RUN_ID"
         echo "Latest run is $RUN_ID"
 
-    # 7. Upload MLflow artifacts to GitHub
+    # 6. Upload MLflow artifacts
     - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4
       with:
         name: mlflow-artifacts
         path: MLProject/mlruns
 
-    # 8. Log in to Docker Hub
+    # 7. Login to Docker Hub
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    # 9. Build Docker Model from MLflow
+    # 8. Build Docker model
     - name: Build Docker Model
       working-directory: MLProject
       run: |
-        RUN_ID="${{ steps.get_run_id.outputs.run_id }}"
+        RUN_ID="${{ env.RUN_ID }}"
+        echo "Building docker for RUN_ID=$RUN_ID"
         mlflow models build-docker \
           -m "runs:/$RUN_ID/model" \
           -n "${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:${RUN_ID}"
 
-
-    # 10. Push Docker Image
+    # 9. Push Docker Image
     - name: Push Docker Image
       run: |
-        docker push ${{ secrets.DOCKERHUB_USERNAME }}/accident-model:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:${RUN_ID}
+        docker tag ${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:${RUN_ID} \
+                   ${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:latest
