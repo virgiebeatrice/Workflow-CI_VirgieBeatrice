@@ -1,5 +1,4 @@
 name: CI Retraining Model
-
 on:
   push:
     branches: ["main"]
@@ -8,56 +7,59 @@ on:
 jobs:
   retrain:
     runs-on: ubuntu-latest
-
     steps:
-
-    # 1. Checkout Repo
     - name: Checkout repository
       uses: actions/checkout@v3
-
-    # 2. Setup Python 3.12.7
+    
     - name: Setup Python 3.12.7
       uses: actions/setup-python@v4
       with:
         python-version: "3.12.7"
-
-    # 3. Install Dependencies
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-
-    # 4. Run MLflow Project (outer run)
-    - name: Run MLflow Project
+    
+    - name: Run Training Script
       working-directory: MLProject
       run: |
-        mlflow run . --env-manager=local
-
-    # 5. Get latest MLflow run ID
+        python modelling.py
+    
     - name: Get latest run ID
       id: get_run_id
       working-directory: MLProject
       run: |
-        RUN_ID=$(ls -td mlruns/*/* | head -1 | xargs basename)
+        # Cari experiment folder terlebih dahulu
+        EXPERIMENT_ID=$(ls -td mlruns/[0-9]* 2>/dev/null | head -1 | xargs basename)
+        if [ -z "$EXPERIMENT_ID" ]; then
+          echo "No experiment found, using default (0)"
+          EXPERIMENT_ID=0
+        fi
+        
+        RUN_ID=$(ls -td mlruns/$EXPERIMENT_ID/*/ 2>/dev/null | head -1 | xargs basename)
+        
+        if [ -z "$RUN_ID" ]; then
+          echo "Error: No run ID found"
+          exit 1
+        fi
+        
         echo "RUN_ID=$RUN_ID" >> $GITHUB_ENV
-        echo "::set-output name=run_id::$RUN_ID"
-        echo "Latest run is $RUN_ID"
-
-    # 6. Upload MLflow artifacts
+        echo "EXPERIMENT_ID=$EXPERIMENT_ID" >> $GITHUB_ENV
+        echo "Latest run is $RUN_ID in experiment $EXPERIMENT_ID"
+    
     - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4
       with:
         name: mlflow-artifacts
         path: MLProject/mlruns
-
-    # 7. Login to Docker Hub
+    
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    # 8. Build Docker model
+    
     - name: Build Docker Model
       working-directory: MLProject
       run: |
@@ -66,8 +68,7 @@ jobs:
         mlflow models build-docker \
           -m "runs:/$RUN_ID/model" \
           -n "${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:${RUN_ID}"
-
-    # 9. Push Docker Image
+    
     - name: Push Docker Image
       run: |
         docker push ${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:${RUN_ID}
