@@ -41,33 +41,32 @@ def train():
 
     mlflow.sklearn.autolog()
 
-    with mlflow.start_run(run_name="CI_RandomForest"):
+    model = RandomForestClassifier(
+        n_estimators=200,
+        random_state=42,
+        n_jobs=-1
+    )
 
-        model = RandomForestClassifier(
-            n_estimators=200,
-            random_state=42,
-            n_jobs=-1
-        )
+    model.fit(X_train, y_train)
 
-        model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
+    acc = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred, average="weighted")
 
-        y_pred = model.predict(X_test)
-        acc = accuracy_score(y_test, y_pred)
-        f1 = f1_score(y_test, y_pred, average="weighted")
+    pred_df = pd.DataFrame({"y_true": y_test, "y_pred": y_pred})
+    pred_path = os.path.join(PRED_DIR, "pred_ci.csv")
+    pred_df.to_csv(pred_path, index=False)
+    mlflow.log_artifact(pred_path)
 
-        pred_df = pd.DataFrame({"y_true": y_test, "y_pred": y_pred})
-        pred_path = os.path.join(PRED_DIR, "pred_ci.csv")
-        pred_df.to_csv(pred_path, index=False)
-        mlflow.log_artifact(pred_path)
-
-        cm = confusion_matrix(y_test, y_pred)
-        plt.figure(figsize=(6,5))
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-        plt.title("CM - CI Run")
-        cm_path = os.path.join(PLOT_DIR, "cm_ci.png")
-        plt.savefig(cm_path)
-        plt.close()
-        mlflow.log_artifact(cm_path)
+    cm = confusion_matrix(y_test, y_pred)
+    plt.figure(figsize=(6,5))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+    plt.title("CM - CI Run")
+    cm_path = os.path.join(PLOT_DIR, "cm_ci.png")
+    plt.savefig(cm_path)
+    plt.close()
+    mlflow.log_artifact(cm_path)
+        
 
 
 if __name__ == "__main__":
