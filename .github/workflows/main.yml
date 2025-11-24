@@ -63,10 +63,11 @@ jobs:
     - name: Build Docker Model
       working-directory: MLProject
       run: |
-        MODEL_DIR="mlruns/0/${{ steps.get_run_id.outputs.run_id }}/artifacts/model"
+        RUN_ID="${{ steps.get_run_id.outputs.run_id }}"
         mlflow models build-docker \
-          -m $MODEL_DIR \
-          -n ${{ secrets.DOCKERHUB_USERNAME }}/accident-model:latest
+          -m "runs:/$RUN_ID/model" \
+          -n "${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:${RUN_ID}"
+
 
     # 10. Push Docker Image
     - name: Push Docker Image
