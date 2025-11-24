@@ -49,6 +49,8 @@ def train():
 
     model.fit(X_train, y_train)
 
+    mlflow.sklearn.log_model(model, artifact_path="model")
+
     y_pred = model.predict(X_test)
     acc = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred, average="weighted")
