@@ -68,6 +68,12 @@ def train():
         plt.savefig(cm_path)
         plt.close()
         mlflow.log_artifact(cm_path)
+
+        run_id_file = os.path.join(ARTIFACT_DIR, "best_run_id.txt")
+        with open(run_id_file, "w") as f:
+            f.write(run.info.run_id)
+
+        print(f"Saved BEST RUN ID to {run_id_file}")
         
         print(f"Training completed! Accuracy: {acc:.4f}, F1: {f1:.4f}")
 
