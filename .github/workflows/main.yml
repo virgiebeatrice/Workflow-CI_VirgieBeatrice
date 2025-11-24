@@ -1,4 +1,4 @@
-name: MLflow CI Training
+name: CI Retraining Model
 
 on:
   push:
@@ -6,45 +6,65 @@ on:
   workflow_dispatch:
 
 jobs:
-  train:
+  retrain:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repo
+
+    # 1. Checkout Repo
+    - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Setup Miniconda
-      uses: conda-incubator/setup-miniconda@v2
+    # 2. Setup Python
+    - name: Setup Python 3.10
+      uses: actions/setup-python@v4
       with:
-        python-version: 3.10
-        activate-environment: mlflow-ci-env
-        environment-file: MLProject/conda.yaml
-        auto-update-conda: true
+        python-version: "3.10"
 
-    - name: Run MLflow Project (Training)
+    # 3. Install Dependencies
+    - name: Install Python dependencies
       run: |
-        cd MLProject
+        python -m pip install --upgrade pip
+        pip install mlflow pandas numpy scikit-learn matplotlib seaborn
+
+    # 4. Run MLflow Project
+    - name: Run MLflow Project (training)
+      working-directory: MLProject
+      run: |
         mlflow run .
 
-    - name: Upload Model Artifact
+    # 5. Get Latest run_id
+    - name: Get latest MLflow run ID
+      id: get_run_id
+      run: |
+        cd MLProject/mlruns/0
+        latest_run=$(ls -t | head -1)
+        echo "run_id=$latest_run" >> $GITHUB_OUTPUT
+
+    # 6. Upload MLflow Artifacts to GitHub
+    - name: Upload MLflow artifacts
       uses: actions/upload-artifact@v4
       with:
         name: mlflow-artifacts
         path: MLProject/mlruns
 
-    # ADVANCE: Build Docker Image
-    - name: Login Docker Hub
+    # 7. Login to Docker Hub
+    - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-    - name: Build Docker Image
+    # 8. Build Docker Image from MLflow Model
+    - name: Build Docker model
+      working-directory: MLProject
       run: |
-        cd MLProject
-        MODEL_PATH=$(find mlruns -name "model" -type d | head -1)
-        mlflow models build-docker -m $MODEL_PATH -n ${{ secrets.DOCKERHUB_USERNAME }}/accident-model:latest
+        MODEL_DIR="mlruns/0/${{ steps.get_run_id.outputs.run_id }}/artifacts/model"
+        mlflow models build-docker \
+          -m $MODEL_DIR \
+          -n ${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:latest
 
+    # 9. Push Docker Image
     - name: Push Docker Image
       run: |
-        docker push ${{ secrets.DOCKERHUB_USERNAME }}/accident-model:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/global-accident-ci:latest
