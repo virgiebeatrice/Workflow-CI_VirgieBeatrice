@@ -1,9 +1,5 @@
 name: global_accident_ci
 
-python_env:
-  type: virtualenv
-
 entry_points:
   main:
-    parameters: {}
     command: "python modelling.py"
