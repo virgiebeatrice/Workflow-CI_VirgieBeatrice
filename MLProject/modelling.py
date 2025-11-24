@@ -1,91 +1,74 @@
 import os
-os.environ.pop("MLFLOW_RUN_ID", None)
-os.environ.pop("MLFLOW_EXPERIMENT_ID", None)
-
 import pandas as pd
 import mlflow
 import mlflow.sklearn
 
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 DATA_PATH = "processed_dataset.csv"
 TARGET_COL = "Accident Severity"
 
-DAGSHUB_OWNER = "virgiebeatrice"
-DAGSHUB_REPO = "global-accident-mlflow.mlflow"      
-
-ARTIFACT_DIR = "artifacts_basic"
+ARTIFACT_DIR = "artifacts_ci"
 PRED_DIR = os.path.join(ARTIFACT_DIR, "predictions")
 PLOT_DIR = os.path.join(ARTIFACT_DIR, "plots")
+os.makedirs(PRED_DIR, exist_ok=True)
+os.makedirs(PLOT_DIR, exist_ok=True)
 
-for folder in [PRED_DIR, PLOT_DIR]:
-    os.makedirs(folder, exist_ok=True)
 
-
-def load_data(path):
+def load_data(path: str):
     df = pd.read_csv(path)
     X = df.drop(columns=[TARGET_COL])
     y = df[TARGET_COL]
     return X, y
 
 
-def init_dagshub():
-    mlflow.set_tracking_uri(f"https://dagshub.com/{DAGSHUB_OWNER}/{DAGSHUB_REPO}.mlflow")
-    print(f"[INFO] Tracking URI: {mlflow.get_tracking_uri()}")
+def train():
+    mlflow.set_experiment("CI_Training")
 
+    X, y = load_data(DATA_PATH)
 
-def train_basic_model(data_path=DATA_PATH):
-    init_dagshub()
-
-    mlflow.set_experiment("GlobalAccident_BasicModel")
-
-    mlflow.start_run(run_name="RandomForest_Baseline")
-
-    X, y = load_data(data_path)
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    mlflow.sklearn.autolog(log_input_examples=True, log_model_signatures=True)
+    mlflow.sklearn.autolog()
 
-    model = RandomForestClassifier(
-        n_estimators=200,
-        random_state=42,
-        n_jobs=-1,
-    )
+    with mlflow.start_run(run_name="CI_RandomForest"):
 
-    model.fit(X_train, y_train)
+        model = RandomForestClassifier(
+            n_estimators=200,
+            random_state=42,
+            n_jobs=-1
+        )
 
-    y_pred = model.predict(X_test)
-    acc = accuracy_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred, average="weighted")
+        model.fit(X_train, y_train)
 
-    mlflow.log_metric("accuracy", acc)
-    mlflow.log_metric("f1_weighted", f1)
+        y_pred = model.predict(X_test)
+        acc = accuracy_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred, average="weighted")
 
-    pred_df = pd.DataFrame({"y_true": y_test, "y_pred": y_pred})
-    pred_path = os.path.join(PRED_DIR, "rf_predictions.csv")
-    pred_df.to_csv(pred_path, index=False)
-    mlflow.log_artifact(pred_path)
+        pred_df = pd.DataFrame({"y_true": y_test, "y_pred": y_pred})
+        pred_path = os.path.join(PRED_DIR, "pred_ci.csv")
+        pred_df.to_csv(pred_path, index=False)
+        mlflow.log_artifact(pred_path)
 
-    cm = confusion_matrix(y_test, y_pred)
-    plt.figure(figsize=(7, 6))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
-    plt.title("Confusion Matrix (Baseline)")
-    plt.xlabel("Predicted")
-    plt.ylabel("Actual")
-    cm_path = os.path.join(PLOT_DIR, "confusion_matrix_baseline.png")
-    plt.savefig(cm_path, dpi=200)
-    plt.close()
-
-    mlflow.log_artifact(cm_path)
-
-    mlflow.end_run()
+        cm = confusion_matrix(y_test, y_pred)
+        plt.figure(figsize=(6,5))
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+        plt.title("CM - CI Run")
+        cm_path = os.path.join(PLOT_DIR, "cm_ci.png")
+        plt.savefig(cm_path)
+        plt.close()
+        mlflow.log_artifact(cm_path)
 
 
 if __name__ == "__main__":
-    train_basic_model()
+    train()

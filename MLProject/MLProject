@@ -1,9 +1,8 @@
-name: accidentseverity_retraining_project
+name: global_accident_ci
 
 conda_env: conda.yaml
 
 entry_points:
   main:
-    parameters:
-      data_path: {type: str, default: "processed_dataset.csv"}
-    command: "python modelling.py --data_path {data_path}"
+    parameters: {}
+    command: "python modelling.py"
