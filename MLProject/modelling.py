@@ -39,8 +39,6 @@ def train():
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    mlflow.sklearn.autolog()
-
     model = RandomForestClassifier(
         n_estimators=200,
         random_state=42,
